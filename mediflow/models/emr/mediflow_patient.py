@@ -137,6 +137,25 @@ class MediflowPatient(models.Model):
             if patient.id_type == "cedula" and nid and not ci.is_valid(nid):
                 raise ValidationError(_("La cédula no es válida."))
 
+    # Una cédula solo puede pertenecer a un paciente por clínica.
+    # Se valida en Python (no con SQL UNIQUE) para no romper la actualización
+    # si ya existen duplicados en la base.
+    @api.constrains("national_id", "id_type", "company_id")
+    def _check_national_id_unique(self):
+        for patient in self:
+            nid = patient.national_id
+            if patient.id_type != "cedula" or not nid:
+                continue
+            duplicate = self.sudo().with_context(active_test=False).search([
+                ("id", "!=", patient.id),
+                ("id_type", "=", "cedula"),
+                ("national_id", "=", nid),
+                ("company_id", "=", patient.company_id.id),
+            ], limit=1)
+            if duplicate:
+                raise ValidationError(_(
+                    "Ya existe un paciente con esta cédula (MRN %s).") % duplicate.mrn)
+
 #AGREGAMOS UNA VALIDACION PARA QUE NO SE ADMITA FECHAS DE NACIMIENTO FUTURAS
     @api.constrains("birthdate")
     def _check_birthdate(self):
@@ -154,14 +173,19 @@ class MediflowPatient(models.Model):
 
                 #SI EL CONTACTO NO O PACIENTE NO EXISTE LO CREAMOS Y LO GAURDAMOS
                 if not vals.get("partner_id"):
-                    full_name=" ".join(filter(None, [
-                        vals.get("first_name"), vals.get("last_name")]))
-                    partner= self.env["res.partner"].create({
-                        "name": full_name,
-                        "phone": vals.get("phone"),
-                        "email": vals.get("email"),
-                        "vat": vals.get("national_id"),
-                        })
+                    nid = vals.get("national_id")
+                    # Reutiliza el contacto existente con la misma cédula en lugar de duplicarlo
+                    partner = nid and self.env["res.partner"].search(
+                        [("vat", "=", nid)], limit=1)
+                    if not partner:
+                        full_name = " ".join(filter(None, [
+                            vals.get("first_name"), vals.get("last_name")]))
+                        partner = self.env["res.partner"].create({
+                            "name": full_name,
+                            "phone": vals.get("phone"),
+                            "email": vals.get("email"),
+                            "vat": nid,
+                            })
                     vals["partner_id"] = partner.id
         return super().create(vals_list)
 

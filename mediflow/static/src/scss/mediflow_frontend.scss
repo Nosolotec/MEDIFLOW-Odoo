@@ -1,5 +1,10 @@
 // MEDIFLOW frontend (portal + login) theme — SA Systems brand system
+//
+// DESACTIVADO: el login y el portal heredan los estilos nativos de Odoo.
+// Para reactivar la marca, quitar los marcadores de comentario de bloque
+// (la línea de apertura y la de cierre) de abajo.
 
+/*
 :root {
     --mf-ocean: #1B5E7E;
     --mf-mint: #21C7A8;
@@ -49,3 +54,4 @@
     opacity: 0.75;
     font-size: 0.8rem;
 }
+*/
